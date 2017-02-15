@@ -1,0 +1,39 @@
+select	c.id				as 'Claim Id',
+		m.LastName			as 'Surname',
+		br.Name				as 'Broker Name',
+		s.Name				as 'Scheme Name',
+		(select min(ISNULL(Convert(Varchar(25),a.CreatedOn,103),'')) from HhsAction a where a.ClaimId = c.Id and a.Type = 153 and a.Description NOT LIKE 'Active Complaint has been unselected by%') as 'Date of Complaint',
+		(select min(ISNULL(Convert(Varchar(25),a2.CreatedOn,103),'')) from HhsAction a2 where a2.ClaimId = c.Id and a2.Type = 171 and a2.Description NOT LIKE 'Active Complaint has been unselected by%') as 'Date SRC Sent (if applicable)',
+		(select min(ISNULL(Convert(Varchar(25),a3.CreatedOn,103),'')) from HhsAction a3 where a3.ClaimId = c.Id and a3.Type = 173 and a3.Description NOT LIKE 'Active Complaint has been unselected by%') as 'Date Underwriter CRU Update Sent',
+		ct.Name				as 'Claim Status',
+		cst.Name			as 'Claim Subtype',		
+		ao.Value			as 'Assessment Outcome',		
+		CTR.Name			as 'Country of Incident',
+		(Convert(Varchar(25),c.TripEndDate,103)) as 'Trip End Date',
+		(select top (1) (Convert(Varchar(25),a.CreatedOn,103)) from HhsAction a left join HhsActionType at on a.type = at.id where c.Id = a.ClaimId and at.id = 29 order by a.CreatedOn desc) as 'Most Recent Member Comms',
+		(select min(ISNULL(Convert(Varchar(25),a.CreatedOn,103),'')) from HhsAction a where a.ClaimId = c.Id and a.Type = 153 and a.Description NOT LIKE 'Active Complaint has been unselected by%') as 'SRC N/A',
+		(Convert(Varchar(25),c.CreatedOn,103)) as 'ClaimCreatedOn',
+dbo.[GetCountDays]((select min(a.CreatedOn) from HhsAction a where a.ClaimId = c.Id and a.Type = 153 and a.Type <> 112),(select getdate()),'1','0') 'Between Days',
+
+(select top (1) a.Description from HhsAction a left join HhsActionType at on a.type = at.id where c.Id = a.ClaimId and a.Type in(153,112) and a.Description like 'Active Complaint%' order by a.CreatedOn desc) as 'Is AC Ticked',
+(select top (1)(Convert(Varchar(25),a.CreatedOn,103)) from HhsAction a left join HhsActionType at on a.type = at.id where c.Id = a.ClaimId and a.Type in(153,112) and a.Description like 'Active Complaint%' order by a.CreatedOn desc) as 'Active Complaint Unselected On'
+
+from HhsClaims c
+INNER JOIN HhsMembers m ON c.MemberId = m.Id
+INNER JOIN HhsMemberships ms ON ms.Id = m.DefMembership
+INNER JOIN HhsSchemeYears sy ON sy.Id = ms.SchemeYearId
+INNER JOIN HhsSchemes s ON s.Id = sy.SchemeId
+INNER JOIN HhsClients cl ON cl.Id = s.ClientId
+LEFT JOIN HhsClients br on cl.BrokerId = br.Id
+INNER JOIN HhsClientType clt on cl.ClientTypeId = clt.Id
+INNER JOIN HhsClaimTypes ct on c.ClaimTypeId = ct.Id
+LEFT JOIN CountryTempForReport ctr on c.CurrentLocationId = ctr.Id
+LEFT JOIN HhsAssessmentOutcomes ao on c.AssessmentOutcomeId = ao.Id
+LEFT JOIN HhsClaimClaimSubTypes ccst on c.Id = ccst.claimId
+LEFT JOIN HhsClaimSubtypes cst on ccst.claimSubTypeId = cst.Id
+where 
+exists (select a.ClaimId from HhsAction a where a.ClaimId = c.Id and Type = 153 and a.CreatedOn IS NOT NULL and a.Type <> 112)
+and c.CreatedOn BETWEEN @StartDate and @EndDate
+and clt.Id in (@ClientType)
+and ct.Id in (@ClaimStatus)
+order by claimId asc
