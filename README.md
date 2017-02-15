@@ -1,3 +1,3 @@
 # SQL-Reporting-Codes
 
-Hello
+This is where I can store source code for Reports.
